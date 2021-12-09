@@ -1,0 +1,19 @@
+{
+  "name": "summits-web-ui",
+  "version": "1.0.0",
+  "repository": "git@github.com:aimparency/summits-web-ui.git",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "npx webpack --config webpack.dev.js",
+    "build": "npx webpack --config webpack.prod.js & cp -f ./dev/index.html ./dev/index.css ./build/"
+  },
+  "author": "Felix Paul Niemeyer <niemeyer.felix@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "ts-loader": "^9.2.3",
+    "typescript": "^4.3.5",
+    "webpack": "^5.65.0", 
+    "webpack-cli": "^4.7.2",
+    "webpack-merge": "^5.8.0"
+  }
+}
