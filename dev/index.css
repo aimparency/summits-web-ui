@@ -1,0 +1,27 @@
+* {
+  margin: 0; 
+}
+
+body {
+  background-color: #171120;
+
+}
+
+.summit {
+  cursor: pointer;
+}
+.summit circle {
+  stroke: #fff2; 
+  stroke-width: 0.2px; 
+  stroke-location: inside; 
+  transition: stroke-width 0.2s, stroke 0.2s; 
+}
+.summit circle:hover {
+  stroke-width: 0.4px; 
+  stroke: #fff4; 
+}
+.summit-title {
+  font: bold 0.15px sans-serif; 
+  fill: white; 
+  pointer-events: none; 
+}
