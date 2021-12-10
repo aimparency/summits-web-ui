@@ -1,4 +1,5 @@
 import ColorHash from 'color-hash' 
+import { Vector2 } from 'three'
 
 type SummitId = string 
 
@@ -8,7 +9,8 @@ interface Summit {
   description: string, 
   x: number, 
   y: number, 
-  r: number
+  r: number, 
+  connections: SummitConnections
 }
 
 interface SummitData {
@@ -16,15 +18,15 @@ interface SummitData {
   description: string
 }
 
-type Connection = [SummitId, ConnectionFeatures]
-
-interface SummitConnections {
-  to: Connection[], 
-  from: Connection[]
+interface Connection {
+  from: SummitId, 
+  to: SummitId, 
+  value: number
 }
 
-interface ConnectionFeatures {
-  value: number
+interface SummitConnections {
+  to: {[id: SummitId]: Connection}, 
+  from: {[id: SummitId]: Connection}
 }
 
 interface SummitRoles {
@@ -59,6 +61,7 @@ interface SummitSvgComponents {
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg"
+const SQR_3_4 = Math.sqrt(3/4) 
 
 async function run() {
   const svg = document.createElementNS(SVG_NS, 'svg') 
@@ -68,22 +71,22 @@ async function run() {
 
   const graph = document.createElementNS(SVG_NS, 'g') 
   svg.appendChild(graph) 
-  let scale = 100; 
+  let scale = 40; 
   let tx = document.body.clientWidth / 2
   let ty = document.body.clientHeight / 2
   graph.setAttribute('transform', ` translate(${tx} ${ty}) scale(${scale})`) 
+
+  const connectionsG = document.createElementNS(SVG_NS, 'g') 
+  graph.appendChild(connectionsG)
+
+  const summitsG = document.createElementNS(SVG_NS, 'g') 
+  graph.appendChild(summitsG)
+
   
   let summits: {[id: SummitId]: Summit } = {}
   let summitEls: {[id: SummitId]: SummitSvgComponents} = {}
-  // type ConnectionMap = {[from: SummitId]: ({[to: SummitId]: SVGPathElement}) }
-  // interface ConnectionEls {
-  //   fromTo: ConnectionMap, 
-  //   toFrom: ConnectionMap
-  // }
-  // let connectionEls: ConnectionEls = {
-  //   fromTo: {}, 
-  //   toFrom: {}
-  // }
+  type ConnectionMap = {[from: SummitId]: ({[to: SummitId]: SVGPathElement}) }
+  let connectionEls: ConnectionMap = {}
 
   const summitColorHash = new ColorHash({ lightness: 0.4 })
 
@@ -91,33 +94,33 @@ async function run() {
     if(summitId in summits) {
       return summits[summitId]
     } else {
-      const nEls = summitEls[summitId] = {
+      const sEls = summitEls[summitId] = {
         circle: document.createElementNS(SVG_NS, 'circle'),
         text: document.createElementNS(SVG_NS, 'text'), 
         g: document.createElementNS(SVG_NS, 'g')
       }
-      setAttributes(nEls.circle, {
+      setAttributes(sEls.circle, {
         x: '0', 
         y: '0', 
         r: '1', 
         stroke: 'none', 
         fill: summitColorHash.hex(summitId)
       })
-      setAttributes(nEls.text, {
+      setAttributes(sEls.text, {
         x: '0', 
         y: '0', 
         'class': 'summit-title',
         'text-anchor': 'middle',
         'dominant-baseline': 'central'
       })
-      setAttributes(nEls.g, {
+      setAttributes(sEls.g, {
         'class': 'summit'
       }) 
-      nEls.g.appendChild(nEls.circle)
-      nEls.g.appendChild(nEls.text) 
-      graph.appendChild(nEls.g)
 
-      console.log("added to svg") 
+      sEls.g.appendChild(sEls.circle)
+      sEls.g.appendChild(sEls.text) 
+      summitsG.appendChild(sEls.g)
+
 
       return summits[summitId] = {
         id: summitId, 
@@ -126,6 +129,10 @@ async function run() {
         x: undefined, 
         y: undefined, 
         r: undefined, 
+        connections: {
+          to: {},
+          from: {}
+        }
       }
     }
   }
@@ -170,17 +177,127 @@ async function run() {
 
   const redrawSummit = (summit: Summit) => {
     let el = summitEls[summit.id]
-    console.log(summit)
     el.g.setAttribute('transform', `scale(${summit.r}) translate(${summit.x} ${summit.y})`)
     redrawAllConnections(summit) 
   }
 
-  const redrawAllConnections = (_summit: Summit) => {
-    // TODO
+  const getOrCreateConnectionEl = (fromId: SummitId, toId: SummitId): SVGPathElement => {
+    if(!(fromId in connectionEls)) {
+      connectionEls[fromId] = {}
+    }
+    if(!(toId in connectionEls[fromId])) {
+      const cPath = document.createElementNS(SVG_NS, 'path')
+      setAttributes(cPath, {
+        'class': 'connection'
+      })
+      connectionsG.appendChild(cPath)
+      connectionEls[fromId][toId] = cPath
+      return cPath
+    } else {
+      return connectionEls[fromId][toId]
+    }
+  } 
+
+  const redrawAllConnections = (summit: Summit) => {
+    console.log("redrawing all connections") 
+    console.log(summit) 
+
+    Object.keys(summit.connections.to).forEach(to => {
+      redrawConnection(summit, summits[to], summit.connections.to[to]) 
+    })
+    Object.keys(summit.connections.from).forEach(from => {
+      redrawConnection(summits[from], summit, summit.connections.from[from]) 
+    })
   }
 
-  const updateConnections = (_summit: Summit, _data: SummitConnections) => {
-    // TODO
+  const redrawConnection = (from: Summit, to: Summit, connection: Connection) => {
+    const cPath = getOrCreateConnectionEl(from.id, to.id) 
+
+    let mFrom = new Vector2(from.x, from.y)
+    let mTo = new Vector2(to.x, to.y) 
+
+    // normalized vector from 'from' to 'to' 
+    const norm = mTo.clone().sub(mFrom).normalize() 
+    const half = norm.clone().multiplyScalar(0.5)
+
+    console.log('norm', norm) 
+    console.log(from, to) 
+
+    // length of the vector from n/2 to the intersection of circle around 0 and around n
+    let side = new Vector2(norm.y, -norm.x).multiplyScalar(SQR_3_4)
+
+    let s0 = half.clone().add(side)
+    let s1 = half.clone().sub(side)
+
+    const prepareVec = (v: Vector2, m: Vector2, r: number) => {
+      let nv = v.clone().multiplyScalar(r).add(m)
+      return nv.x + " " + nv.y
+    }
+
+    const makeCoordinates = (m: Vector2, r: number) => {
+      return {
+        s0: prepareVec(s0, m, r), 
+        s1: prepareVec(s1, m, r), 
+        m: prepareVec(new Vector2(0,0), m, r)
+      }
+    }
+
+    const coordsFrom = makeCoordinates(mFrom, from.r) 
+
+    s0.negate()
+    s1.negate()
+
+    const coordsTo = makeCoordinates(mTo, to.r)
+
+    console.log(coordsTo)
+
+    let path = [
+      'M', coordsFrom.m, 
+      'L', coordsFrom.s1, 
+      'C', '0 0', '0 0', coordsTo.s0, 
+      'L', coordsTo.m, 
+      'L', coordsTo.s1, 
+      'L', coordsFrom.s0, 
+      'Z' 
+    ].join(' ')
+
+    setAttributes(cPath, {
+      d: path
+    })
+  }
+
+  const updateConnections = (summit: Summit, connections: SummitConnections) => {
+    Object.keys(connections.to).forEach(to => {
+      const connection = connections.to[to]
+      updateConnection(connection)
+    })
+    Object.keys(connections.from).forEach(from => {
+      const connection = connections.from[from]
+      updateConnection(connection)
+    })
+
+  }
+
+  const updateConnection = (connection: Connection) => {
+    if(connection.from in summits && connection.to in summits) {
+      const from = summits[connection.from]
+      const to = summits[connection.to]
+      let updatedConnection = undefined
+      if(!(connection.to in from.connections.to)) {
+        from.connections.to[connection.to] = connection
+        to.connections.from[connection.from] = connection
+        updatedConnection = connection
+      } else {
+        const prevCon = from.connections.to[connection.to]
+        if(prevCon.value !== connection.value) {
+          prevCon.value = connection.value
+          updatedConnection = prevCon
+        }
+      }
+      if (updatedConnection !== undefined) {
+        redrawConnection(from, to, updatedConnection)
+      }
+    }
   }
 
   const updateRoles = (_summit: Summit, _data: SummitRoles) => {
@@ -190,8 +307,6 @@ async function run() {
   let socket = new WebSocket('ws://localhost:3030/v1')
   socket.onmessage = (event) => {
     const summitUpdate = JSON.parse(event.data) as SummitUpdate;
-
-    console.log("received summit update") 
 
     const summit = getOrCreateSummit(summitUpdate.id) 
     summitUpdate.data && updateData(summit, summitUpdate.data)

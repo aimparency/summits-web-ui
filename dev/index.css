@@ -25,3 +25,7 @@ body {
   fill: white; 
   pointer-events: none; 
 }
+
+.connection {
+  fill: #fff8;
+}
