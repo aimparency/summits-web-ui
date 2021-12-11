@@ -1,5 +1,6 @@
 import ColorHash from 'color-hash' 
 import { Vector2 } from 'three'
+import Color from 'color'
 
 type SummitId = string 
 
@@ -71,7 +72,7 @@ async function run() {
 
   const graph = document.createElementNS(SVG_NS, 'g') 
   svg.appendChild(graph) 
-  let scale = 40; 
+  let scale = 70; 
   let tx = document.body.clientWidth / 2
   let ty = document.body.clientHeight / 2
   graph.setAttribute('transform', ` translate(${tx} ${ty}) scale(${scale})`) 
@@ -177,7 +178,7 @@ async function run() {
 
   const redrawSummit = (summit: Summit) => {
     let el = summitEls[summit.id]
-    el.g.setAttribute('transform', `scale(${summit.r}) translate(${summit.x} ${summit.y})`)
+    el.g.setAttribute('transform', `translate(${summit.x} ${summit.y}) scale(${summit.r})`)
     redrawAllConnections(summit) 
   }
 
@@ -187,8 +188,10 @@ async function run() {
     }
     if(!(toId in connectionEls[fromId])) {
       const cPath = document.createElementNS(SVG_NS, 'path')
+      let color = Color(summitColorHash.hex(fromId)).lighten(0.7)
       setAttributes(cPath, {
-        'class': 'connection'
+        'class': 'connection', 
+        'fill': color.hex() + 'AA'
       })
       connectionsG.appendChild(cPath)
       connectionEls[fromId][toId] = cPath
@@ -199,9 +202,6 @@ async function run() {
   } 
 
   const redrawAllConnections = (summit: Summit) => {
-    console.log("redrawing all connections") 
-    console.log(summit) 
-
     Object.keys(summit.connections.to).forEach(to => {
       redrawConnection(summit, summits[to], summit.connections.to[to]) 
     })
@@ -220,14 +220,15 @@ async function run() {
     const norm = mTo.clone().sub(mFrom).normalize() 
     const half = norm.clone().multiplyScalar(0.5)
 
-    console.log('norm', norm) 
-    console.log(from, to) 
 
     // length of the vector from n/2 to the intersection of circle around 0 and around n
     let side = new Vector2(norm.y, -norm.x).multiplyScalar(SQR_3_4)
 
     let s0 = half.clone().add(side)
     let s1 = half.clone().sub(side)
+
+    let taille0 = s0.clone().add(new Vector2(-s0.y, s0.x).multiplyScalar(1 - connection.value))
+    let taille1 = s1.clone().add(new Vector2(s1.y, -s1.x).multiplyScalar(1 - connection.value))
 
     const prepareVec = (v: Vector2, m: Vector2, r: number) => {
       let nv = v.clone().multiplyScalar(r).add(m)
@@ -238,7 +239,9 @@ async function run() {
       return {
         s0: prepareVec(s0, m, r), 
         s1: prepareVec(s1, m, r), 
-        m: prepareVec(new Vector2(0,0), m, r)
+        m: prepareVec(new Vector2(0,0), m, r), 
+        taille0: prepareVec(taille0, m, r), 
+        taille1: prepareVec(taille1, m, r) 
       }
     }
 
@@ -246,18 +249,18 @@ async function run() {
 
     s0.negate()
     s1.negate()
+    taille0.negate()
+    taille1.negate()
 
-    const coordsTo = makeCoordinates(mTo, to.r)
-
-    console.log(coordsTo)
+    const coordsTo = makeCoordinates(mTo.clone().sub(norm.clone().multiplyScalar(to.r)), to.r)
 
     let path = [
       'M', coordsFrom.m, 
       'L', coordsFrom.s1, 
-      'C', '0 0', '0 0', coordsTo.s0, 
+      'C', coordsFrom.taille1, coordsTo.taille0, coordsTo.s0, 
       'L', coordsTo.m, 
       'L', coordsTo.s1, 
-      'L', coordsFrom.s0, 
+      'C', coordsTo.taille1, coordsFrom.taille0, coordsFrom.s0, 
       'Z' 
     ].join(' ')
 
@@ -314,5 +317,4 @@ async function run() {
     summitUpdate.roles && updateRoles(summit, summitUpdate.roles) 
     summitUpdate.connections && updateConnections(summit, summitUpdate.connections) 
   };
-  console.log(socket)
 }

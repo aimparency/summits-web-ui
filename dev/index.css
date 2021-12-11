@@ -21,11 +21,10 @@ body {
   stroke: #fff4; 
 }
 .summit-title {
-  font: bold 0.15px sans-serif; 
+  font: 0.2px sans-serif; 
   fill: white; 
   pointer-events: none; 
 }
 
 .connection {
-  fill: #fff8;
 }
